@@ -41,9 +41,10 @@ function ActionButton({ step, stepVariant = "success", label, sublabel, tooltip,
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="z-50 max-w-[260px] rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-xs leading-relaxed text-zinc-300 shadow-xl"
-          side="right"
+          className="z-50 max-w-[min(260px,var(--radix-tooltip-content-available-width))] rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-xs leading-relaxed text-zinc-300 shadow-xl"
+          side="top"
           sideOffset={8}
+          collisionPadding={12}
         >
           {tooltip}
           <Tooltip.Arrow className="fill-zinc-900" />
