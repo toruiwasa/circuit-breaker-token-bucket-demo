@@ -100,8 +100,9 @@ export default function CircuitBreakerDisplay({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="z-50 max-w-[200px] rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-xs text-zinc-200 shadow-xl"
+                    className="z-50 max-w-[min(200px,var(--radix-tooltip-content-available-width))] rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-xs text-zinc-200 shadow-xl"
                     sideOffset={6}
+                    collisionPadding={12}
                   >
                     {m.description}
                     <Tooltip.Arrow className="fill-zinc-800" />
