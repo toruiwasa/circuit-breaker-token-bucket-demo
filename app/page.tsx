@@ -61,6 +61,13 @@ function useCountdown(
   return remainingSec;
 }
 
+type AdmitResult = {
+  admitted: boolean;
+  reason: string;
+  reservationId: string | null;
+  isProbe: boolean;
+};
+
 export default function DemoPage() {
   const sessionId = useSessionId();
   const [demoState, setDemoState] = useState<DemoState>(DEFAULT_STATE);
@@ -68,6 +75,7 @@ export default function DemoPage() {
   const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [hasHistory, setHasHistory] = useState(false);
+  const [stuckProbeAt, setStuckProbeAt] = useState<number | null>(null);
 
   function showToast(title: string, description?: string, variant: ToastMessage["variant"] = "error") {
     const id = `t-${++logCounter}`;
@@ -83,6 +91,7 @@ export default function DemoPage() {
     demoState.cooldownMs
   );
   const hint = deriveHint(demoState.state, remainingSec, hasHistory);
+  const cooldownExpired = demoState.state === "OPEN" && remainingSec === 0;
 
   function addLog(badge: string, label: string, variant: LogEntry["variant"]) {
     setLogs((prev) =>
@@ -137,12 +146,7 @@ export default function DemoPage() {
   async function runSingleRequest(
     outcome: "success" | "failure" | "rate_limit" = "success"
   ): Promise<void> {
-    const admitRes = await apiPost<{
-      admitted: boolean;
-      reason: string;
-      reservationId: string | null;
-      isProbe: boolean;
-    }>("/api/admit", { sessionId });
+    const admitRes = await apiPost<AdmitResult>("/api/admit", { sessionId });
 
     if (!admitRes) return;
 
@@ -182,6 +186,8 @@ export default function DemoPage() {
       isRateLimitError: mockRes.isRateLimitError,
     });
 
+    if (mockRes.success) setStuckProbeAt(null);
+
     await fetchState();
   }
 
@@ -208,13 +214,6 @@ export default function DemoPage() {
   const handleFireConcurrent = useCallback(async () => {
     setBusy(true);
     addLog("ACTION", "Fire 3 Concurrent Requests", "info");
-
-    type AdmitResult = {
-      admitted: boolean;
-      reason: string;
-      reservationId: string | null;
-      isProbe: boolean;
-    };
 
     const results = await Promise.allSettled([
       apiPost<AdmitResult>("/api/admit", { sessionId }),
@@ -270,12 +269,42 @@ export default function DemoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
+  const handleForceToFail = useCallback(async () => {
+    setBusy(true);
+    setHasHistory(true);
+    addLog("ACTION", "Force to Fail (Return 429)", "info");
+    await runSingleRequest("rate_limit");
+    setBusy(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const handleSimulateStuckProbe = useCallback(async () => {
+    setBusy(true);
+    setHasHistory(true);
+    addLog("ACTION", "Simulate Stuck Probe", "warn");
+    const admitRes = await apiPost<AdmitResult>("/api/admit", { sessionId });
+    if (admitRes?.admitted) {
+      if (admitRes.isProbe) {
+        setStuckProbeAt(Date.now());
+        addLog("PROBE", `Stuck — reservation …${admitRes.reservationId?.slice(-8)}`, "probe");
+      } else {
+        addLog("ADMITTED", "Not in HALF-OPEN — no probe to stick", "warn");
+      }
+    } else if (admitRes) {
+      addLog("REJECTED", admitRes.reason ?? "Not admitted", "error");
+    }
+    await fetchState();
+    setBusy(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
   const handleReset = useCallback(async () => {
     setBusy(true);
     addLog("ACTION", "Reset session state", "info");
     await apiPost("/api/reset", { sessionId });
     setLogs([]);
     setHasHistory(false);
+    setStuckProbeAt(null);
     await fetchState();
     addLog("RESET", "State cleared", "info");
     setBusy(false);
@@ -307,9 +336,15 @@ export default function DemoPage() {
           busy={busy}
           hasHistory={hasHistory}
           hint={hint}
+          cooldownExpired={cooldownExpired}
+          stuckProbeAt={stuckProbeAt}
+          probeLockTtlMs={demoState.probeLockTtlMs}
+          breakerState={demoState.state}
           onSendRequest={handleSendRequest}
           onSimulateFailures={handleSimulateFailures}
           onFireConcurrent={handleFireConcurrent}
+          onForceToFail={handleForceToFail}
+          onSimulateStuckProbe={handleSimulateStuckProbe}
           onReset={handleReset}
         />
 

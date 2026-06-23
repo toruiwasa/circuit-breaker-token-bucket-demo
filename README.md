@@ -1,6 +1,6 @@
 # Circuit Breaker × Token Bucket — Interactive Demo
 
-An interactive iframe demo for the blog post *LLM Router Architecture: A Distributed Systems Perspective*. Readers can trigger all 5 verification scenarios live in the browser — each tab gets its own isolated Redis state.
+An interactive demo companion to the blog post [*LLM Router Architecture: A Distributed Systems Perspective*](https://toruiwasa.com/blog/llm-router-architecture-from-distributed-systems-patterns-to-a-production-circuit-breaker-in-redis). Run all 5 verification scenarios live in the browser — each tab gets its own isolated Redis state.
 
 ## Overview
 
@@ -71,7 +71,7 @@ Two independent layers:
 pnpm test
 
  Test Files  3 passed (3)
-      Tests  49 passed (49)
+      Tests  50 passed (50)
 ```
 
 > **macOS note:** Works with both Docker Desktop and Colima. The correct Docker socket is auto-resolved from `~/.colima/default/docker.sock` and `~/.docker/run/docker.sock`; no manual `DOCKER_HOST` configuration needed.

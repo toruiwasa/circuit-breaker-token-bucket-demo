@@ -12,7 +12,7 @@ export function deriveHint(
     return `Breaker is OPEN. Step 3 will be ready in ${remainingSec}s — the cooldown must expire first.`;
   }
   if (state === "OPEN" && remainingSec === 0) {
-    return "Cooldown expired. Try Step 3 now to see probe single-flight in action.";
+    return "Cooldown expired. Try Step 3 (probe single-flight), Step 4 (probe failure), or Step 5 (stuck probe).";
   }
   if (state === "HALF_OPEN") {
     return "Breaker is HALF-OPEN. Step 1 will close it on success; Step 2 will re-open it on failure.";

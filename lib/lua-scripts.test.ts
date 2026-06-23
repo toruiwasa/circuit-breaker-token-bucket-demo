@@ -250,6 +250,15 @@ describe("Round trips", () => {
     expect(waits).toHaveLength(2);
   });
 
+  it("probe failure with 429: immediate OPEN revert + bucket zeroed", async () => {
+    const ts = now();
+    await client.hset(CIRCUIT, "state", "HALF_OPEN");
+    const [, resId] = await admit(ts, "rt-probe-429");
+    await report(resId, false, 0, true, ts); // isRateLimitErr=true, isProbe=true
+    expect(await client.hget(CIRCUIT, "state")).toBe("OPEN");
+    expect(await client.hget(BUCKET, "tokens")).toBe("0");
+  });
+
   it("recovery: probe success closes the circuit", async () => {
     const ts = now();
     // pre-set OPEN with expired cooldown

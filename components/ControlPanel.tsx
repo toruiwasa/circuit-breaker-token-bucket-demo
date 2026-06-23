@@ -1,5 +1,7 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Tooltip } from "radix-ui";
+import type { BreakerState } from "@/lib/types";
 
 type StepVariant = "success" | "failure" | "warn";
 
@@ -58,21 +60,54 @@ interface Props {
   busy: boolean;
   hasHistory: boolean;
   hint: string | null;
+  cooldownExpired: boolean;
+  stuckProbeAt: number | null;
+  probeLockTtlMs: number;
+  breakerState: BreakerState;
   onSendRequest: () => void;
   onSimulateFailures: () => void;
   onFireConcurrent: () => void;
+  onForceToFail: () => void;
+  onSimulateStuckProbe: () => void;
   onReset: () => void;
+}
+
+function useOrphanCountdown(stuckProbeAt: number | null, probeLockTtlMs: number): number {
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    if (!stuckProbeAt) { setSec(0); return; }
+    function tick() {
+      setSec(Math.max(0, Math.ceil((probeLockTtlMs - (Date.now() - stuckProbeAt!)) / 1000)));
+    }
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [stuckProbeAt, probeLockTtlMs]);
+  return sec;
 }
 
 export default function ControlPanel({
   busy,
   hasHistory,
   hint,
+  cooldownExpired,
+  stuckProbeAt,
+  probeLockTtlMs,
+  breakerState,
   onSendRequest,
   onSimulateFailures,
   onFireConcurrent,
+  onForceToFail,
+  onSimulateStuckProbe,
   onReset,
 }: Props) {
+  const orphanSec = useOrphanCountdown(stuckProbeAt, probeLockTtlMs);
+  const showStuckBanner = stuckProbeAt !== null && breakerState === "HALF_OPEN";
+  const probeOrphaned = stuckProbeAt !== null && orphanSec === 0;
+  const canSimulateStuck =
+    (breakerState === "OPEN" && cooldownExpired) ||
+    (breakerState === "HALF_OPEN" && probeOrphaned);
+
   return (
     <Tooltip.Provider delayDuration={300}>
       <div className="rounded-xl border border-white/10 bg-white/5 p-5">
@@ -83,6 +118,14 @@ export default function ControlPanel({
         {hint && (
           <div className="mb-3 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-xs text-zinc-300">
             {hint}
+          </div>
+        )}
+
+        {showStuckBanner && (
+          <div className="mb-3 rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-400">
+            {orphanSec > 0
+              ? `Probe stuck — orphan recovery in ${orphanSec}s`
+              : "Probe slot available — ready for next attempt"}
           </div>
         )}
 
@@ -101,7 +144,7 @@ export default function ControlPanel({
             stepVariant="failure"
             label="Simulate Failure ×3"
             sublabel="3 consecutive failures → breaker trips to OPEN"
-            tooltip="Sends 3 failures back-to-back. After the 3rd, the failure counter hits the threshold and the circuit breaker trips to OPEN — all subsequent requests are rejected instantly without reaching the LLM."
+            tooltip="Sends 3 failures back-to-back. After the 3rd, the failure counter hits the threshold and the circuit breaker trips to OPEN — all subsequent requests are rejected instantly without reaching the LLM. (※ This demo uses failure_threshold=3 to minimize Redis calls; the blog article uses 5.)"
             onClick={onSimulateFailures}
             disabled={busy}
           />
@@ -113,6 +156,24 @@ export default function ControlPanel({
             tooltip="Best run right after the 10 s cooldown expires. All 3 ADMITs land simultaneously. Because the breaker is HALF-OPEN, only one request claims the probe lock (isProbe=true). The other two are rejected immediately with HALF_OPEN_WAIT."
             onClick={onFireConcurrent}
             disabled={busy}
+          />
+          <ActionButton
+            step={4}
+            stepVariant="failure"
+            label="Force to Fail (Return 429)"
+            sublabel="ADMIT → mock LLM call (429) → REPORT"
+            tooltip="Runs the full request flow but forces the mock LLM to return 429. Best used after the cooldown expires: the probe fails, the breaker immediately reverts to OPEN, and the token bucket is zeroed."
+            onClick={onForceToFail}
+            disabled={busy}
+          />
+          <ActionButton
+            step={5}
+            stepVariant="warn"
+            label="Simulate Stuck Probe"
+            sublabel="ADMIT only — skips REPORT (crash simulation)"
+            tooltip="Calls ADMIT but never calls REPORT, simulating a process crash mid-flight. The probe lock stays held for probe_lock_ttl_ms (5 s). After it expires, orphan recovery kicks in — the next ADMIT can claim the probe slot again."
+            onClick={onSimulateStuckProbe}
+            disabled={busy || !canSimulateStuck}
           />
           <ActionButton
             label="Reset"
